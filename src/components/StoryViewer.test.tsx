@@ -55,7 +55,7 @@ describe('StoryViewer', () => {
     render(<StoryViewer story={testStory} />)
 
     expect(screen.getByRole('heading', { name: 'Test Story' })).toBeInTheDocument()
-    expect(screen.getByText('Scene 1 / 3')).toBeInTheDocument()
+    expect(screen.getByAltText('Story scene 1')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /previous/i })).toBeDisabled()
   })
 
@@ -69,7 +69,7 @@ describe('StoryViewer', () => {
     expect(screen.getByText('First scene long caption.')).toBeInTheDocument()
 
     await user.click(nextButton)
-    expect(screen.getByText('Scene 2 / 3')).toBeInTheDocument()
+    expect(screen.getByAltText('Story scene 2')).toBeInTheDocument()
   })
 
   it('supports previous and keyboard navigation while clamping bounds', async () => {
@@ -77,15 +77,15 @@ describe('StoryViewer', () => {
     render(<StoryViewer story={testStory} />)
 
     await user.keyboard('{ArrowLeft}')
-    expect(screen.getByText('Scene 1 / 3')).toBeInTheDocument()
+    expect(screen.getByAltText('Story scene 1')).toBeInTheDocument()
 
     const nextButton = screen.getByRole('button', { name: /next/i })
     await user.click(nextButton)
     await user.click(nextButton)
-    expect(screen.getByText('Scene 2 / 3')).toBeInTheDocument()
+    expect(screen.getByAltText('Story scene 2')).toBeInTheDocument()
 
     await user.keyboard('{ArrowLeft}')
-    expect(screen.getByText('Scene 1 / 3')).toBeInTheDocument()
+    expect(screen.getByAltText('Story scene 1')).toBeInTheDocument()
   })
 
   it('uses scene-level transition overrides and falls back to default transition', async () => {
@@ -116,7 +116,7 @@ describe('StoryViewer', () => {
 
     render(<StoryViewer story={testStory} />)
 
-    expect(screen.getByText('Scene 3 / 3')).toBeInTheDocument()
+    expect(screen.getByAltText('Story scene 3')).toBeInTheDocument()
     const nextButton = screen.getByRole('button', { name: /next/i })
     expect(nextButton).toBeEnabled()
 

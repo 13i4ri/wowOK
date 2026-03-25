@@ -138,6 +138,66 @@ export const storyConfig: StoryConfig = {
       id: 'scene-20',
       imageSrc: 'scenes/scene-20.png',
       caption: 'how i think we should sit:',
+      transition: 'cut',
+    },
+    {
+      id: 'scene-21',
+      imageSrc: 'scenes/scene-21.jpg',
+      caption: '',
+      transition: 'cut',
+    },
+    {
+      id: 'scene-22',
+      imageSrc: 'scenes/scene-22.jpg.avif',
+      caption: '',
+      transition: 'cut',
+    },
+    {
+      id: 'scene-23',
+      imageSrc: 'scenes/scene-23.jpg.avif',
+      caption: '',
+      transition: 'cut',
+    },
+    {
+      id: 'scene-24',
+      imageSrc: 'scenes/scene-24.png',
+      caption: '...',
+      transition: 'cut',
+    },
+    {
+      id: 'scene-25',
+      imageSrc: 'scenes/scene-25.png',
+      caption: '',
+      transition: 'cut',
+    },
+    {
+      id: 'scene-26',
+      imageSrc: 'scenes/scene-26.png',
+      caption: "but no, it can't end here",
+      transition: 'cut'
+    },
+    {
+      id: 'scene-27',
+      imageSrc: 'scenes/scene-27.png',
+      caption: 'IT CANT END HERE',
+      transition: 'cut',
+    },
+    {
+      id: 'scene-28',
+      imageSrc: 'scenes/scene-28.png',
+      caption: '',
+      transition: 'cut',
+      audioSrc: 'scenes/rocky.mp3',
+    },
+    {
+      id: 'scene-29',
+      imageSrc: 'scenes/scene-29.png',
+      caption: '',
+    },
+    {
+      id: 'scene-30',
+      imageSrc: 'scenes/scene-30.png',
+      caption: '',
     },
   ],
 }

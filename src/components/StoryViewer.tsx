@@ -9,6 +9,9 @@ import { useTypewriter } from '../hooks/useTypewriter'
 import type { SceneTransition, StoryConfig } from '../types/story'
 
 const STORAGE_KEY = 'romantic_story:last_scene'
+const SCENE_28_ID = 'scene-28'
+const SCENE_28_TOTAL_SECONDS = 20
+const SCENE_28_SLIDE_COUNT = 9
 
 type StoryViewerProps = {
   story: StoryConfig
@@ -97,7 +100,11 @@ export function StoryViewer({ story }: StoryViewerProps) {
   const lastIndex = hasScenes ? story.scenes.length - 1 : 0
   const [sceneIndex, setSceneIndex] = useState(() => readSavedIndex(lastIndex))
   const [direction, setDirection] = useState<1 | -1>(1)
+  const [scene28FallbackSeconds, setScene28FallbackSeconds] = useState(0)
+  const [scene28AudioSeconds, setScene28AudioSeconds] = useState(0)
   const activeAudioRef = useRef<HTMLAudioElement | null>(null)
+  const scene28StartMsRef = useRef(0)
+  const [, forceScene28Render] = useState(0)
 
   useEffect(() => {
     if (hasScenes) {
@@ -120,6 +127,23 @@ export function StoryViewer({ story }: StoryViewerProps) {
   const frameSrc = activeScene
     ? `${import.meta.env.BASE_URL}${activeScene.imageSrc}`
     : ''
+  const isScene28 = activeScene?.id === SCENE_28_ID
+  const scene28ProgressSeconds = isScene28
+    ? Math.max(scene28AudioSeconds, scene28FallbackSeconds)
+    : 0
+  const scene28SlideIndex = isScene28
+    ? clamp(
+        Math.floor(
+          (scene28ProgressSeconds / SCENE_28_TOTAL_SECONDS) *
+            SCENE_28_SLIDE_COUNT,
+        ),
+        0,
+        SCENE_28_SLIDE_COUNT - 1,
+      )
+    : 0
+  const scene28SlideSrc = `${import.meta.env.BASE_URL}scenes/scene-28-${
+    scene28SlideIndex + 1
+  }.png`
   const isPdfScene = activeScene ? isPdfSource(activeScene.imageSrc) : false
   const isCutTransition = activeTransition === 'cut'
   const hideNextButton = Boolean(
@@ -127,6 +151,26 @@ export function StoryViewer({ story }: StoryViewerProps) {
       activeScene?.autoAdvanceOnAudioEnd &&
       sceneIndex < lastIndex,
   )
+
+  useEffect(() => {
+    if (!isScene28) {
+      return
+    }
+
+    scene28StartMsRef.current = Date.now()
+    // Reset scene-28 timing when it becomes active.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setScene28AudioSeconds(0)
+    setScene28FallbackSeconds(0)
+
+    const intervalId = window.setInterval(() => {
+      setScene28FallbackSeconds((Date.now() - scene28StartMsRef.current) / 1000)
+    }, 250)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [isScene28, activeScene?.id])
 
   useEffect(() => {
     if (activeAudioRef.current) {
@@ -142,12 +186,39 @@ export function StoryViewer({ story }: StoryViewerProps) {
 
     const audio = new Audio(`${import.meta.env.BASE_URL}${audioSrc}`)
     audio.preload = 'auto'
+    const onTimeUpdate = () => {
+      if (!isScene28) {
+        return
+      }
+
+      setScene28AudioSeconds(audio.currentTime)
+      forceScene28Render((tick) => tick + 1)
+    }
+    audio.addEventListener('play', onTimeUpdate)
+    audio.addEventListener('timeupdate', onTimeUpdate)
 
     if (activeScene?.autoAdvanceOnAudioEnd && sceneIndex < lastIndex) {
-      audio.addEventListener('ended', () => {
+      const onEnded = () => {
         setDirection(1)
         setSceneIndex((currentIndex) => Math.min(currentIndex + 1, lastIndex))
+      }
+      audio.addEventListener('ended', onEnded)
+
+      activeAudioRef.current = audio
+      void audio.play().catch(() => {
+        // Browsers can block autoplay before user interaction.
       })
+
+      return () => {
+        audio.removeEventListener('play', onTimeUpdate)
+        audio.removeEventListener('timeupdate', onTimeUpdate)
+        audio.removeEventListener('ended', onEnded)
+        audio.pause()
+        audio.currentTime = 0
+        if (activeAudioRef.current === audio) {
+          activeAudioRef.current = null
+        }
+      }
     }
 
     activeAudioRef.current = audio
@@ -156,13 +227,15 @@ export function StoryViewer({ story }: StoryViewerProps) {
     })
 
     return () => {
+      audio.removeEventListener('play', onTimeUpdate)
+      audio.removeEventListener('timeupdate', onTimeUpdate)
       audio.pause()
       audio.currentTime = 0
       if (activeAudioRef.current === audio) {
         activeAudioRef.current = null
       }
     }
-  }, [activeScene?.audioSrc, activeScene?.autoAdvanceOnAudioEnd, activeScene?.id, lastIndex, sceneIndex])
+  }, [activeScene?.audioSrc, activeScene?.autoAdvanceOnAudioEnd, activeScene?.id, isScene28, lastIndex, sceneIndex])
 
   useEffect(() => {
     if (!hasScenes) {
@@ -175,13 +248,26 @@ export function StoryViewer({ story }: StoryViewerProps) {
 
     nearIndexes.forEach((index) => {
       const nearScene = story.scenes[index]
-      if (isPdfSource(nearScene.imageSrc)) {
-        return
-      }
+      const nearImageSources =
+        nearScene.id === SCENE_28_ID
+          ? Array.from(
+              { length: SCENE_28_SLIDE_COUNT },
+              (_, slideIndex) =>
+                `${import.meta.env.BASE_URL}scenes/scene-28-${
+                  slideIndex + 1
+                }.png`,
+            )
+          : [`${import.meta.env.BASE_URL}${nearScene.imageSrc}`]
 
-      const nearImage = new Image()
-      nearImage.decoding = 'async'
-      nearImage.src = `${import.meta.env.BASE_URL}${nearScene.imageSrc}`
+      nearImageSources.forEach((source) => {
+        if (isPdfSource(source)) {
+          return
+        }
+
+        const nearImage = new Image()
+        nearImage.decoding = 'async'
+        nearImage.src = source
+      })
     })
   }, [hasScenes, lastIndex, sceneIndex, story.scenes])
 
@@ -229,7 +315,14 @@ export function StoryViewer({ story }: StoryViewerProps) {
   }, [handleNext, handlePrevious])
 
   const showTypeCursor = !isComplete
-  const sceneMedia = isPdfScene ? (
+  const sceneMedia = isScene28 ? (
+    <img
+      className="story-image"
+      src={scene28SlideSrc}
+      alt={`Story scene ${sceneIndex + 1} slide ${scene28SlideIndex + 1}`}
+      loading="eager"
+    />
+  ) : isPdfScene ? (
     <object
       className="story-pdf"
       data={frameSrc}
