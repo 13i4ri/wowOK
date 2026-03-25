@@ -1,0 +1,67 @@
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Cormorant+Garamond:wght@400;500;600;700&family=Manrope:wght@400;500;700&family=Permanent+Marker&display=swap');
+
+:root {
+  --paper-base: #fdf9ee;
+  --paper-warm: #f8f2e1;
+  --ink-soft: #3d3730;
+  --ink-strong: #201a15;
+  --frame-white: #ffffff;
+  --line: #e9e0cc;
+  --line-strong: #d2c6ad;
+  --accent: #7a3d31;
+  --accent-hover: #9c4f3f;
+  --button-disabled: #c9b99a;
+  --shadow: 0 18px 44px rgba(52, 35, 15, 0.2);
+  --serif: 'Cormorant Garamond', Georgia, serif;
+  --sans: 'Manrope', 'Avenir Next', sans-serif;
+  --hand: 'Caveat', cursive;
+  --marker: 'Permanent Marker', cursive;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink-soft);
+  font-family: var(--sans);
+  background-image:
+    radial-gradient(circle at 12% 18%, rgba(202, 185, 155, 0.24), transparent 42%),
+    radial-gradient(circle at 84% 92%, rgba(189, 166, 128, 0.2), transparent 39%),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 28px,
+      rgba(110, 95, 73, 0.09) 28px,
+      rgba(110, 95, 73, 0.09) 30px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 34px,
+      rgba(150, 132, 103, 0.07) 34px,
+      rgba(150, 132, 103, 0.07) 35px
+    ),
+    linear-gradient(160deg, var(--paper-base), var(--paper-warm));
+  position: relative;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.2;
+  background-image:
+    radial-gradient(circle at 10% 12%, rgba(120, 102, 74, 0.2) 0 1px, transparent 2px),
+    radial-gradient(circle at 88% 14%, rgba(120, 102, 74, 0.2) 0 1px, transparent 2px),
+    radial-gradient(circle at 85% 87%, rgba(120, 102, 74, 0.2) 0 1px, transparent 2px),
+    radial-gradient(circle at 18% 82%, rgba(120, 102, 74, 0.2) 0 1px, transparent 2px);
+  background-size: 220px 220px;
+}
+
+#root {
+  min-height: 100vh;
+}
