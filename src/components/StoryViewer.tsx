@@ -4,7 +4,7 @@ import {
   type Transition,
   type Variants,
 } from 'framer-motion'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTypewriter } from '../hooks/useTypewriter'
 import type { SceneTransition, StoryConfig } from '../types/story'
 
@@ -35,6 +35,23 @@ const transitionVariants: Record<SceneTransition, Variants> = {
     center: { opacity: 1, scale: 1 },
     exit: { opacity: 0, scale: 1.05 },
   },
+  swipe: {
+    enter: (direction: number) => ({
+      x: direction > 0 ? 200 : -200,
+      y: direction > 0 ? 24 : -24,
+      rotate: direction > 0 ? 10 : -10,
+      scale: 0.96,
+      opacity: 0.86,
+    }),
+    center: { x: 0, y: 0, rotate: 0, scale: 1, opacity: 1 },
+    exit: (direction: number) => ({
+      x: direction > 0 ? -320 : 320,
+      y: direction > 0 ? -40 : 40,
+      rotate: direction > 0 ? -16 : 16,
+      scale: 0.9,
+      opacity: 0,
+    }),
+  },
 }
 
 const transitionTiming: Record<SceneTransition, Transition> = {
@@ -42,10 +59,15 @@ const transitionTiming: Record<SceneTransition, Transition> = {
   fade: { duration: 0.42, ease: 'easeInOut' },
   cut: { duration: 0.01, ease: 'linear' },
   zoom: { duration: 0.5, ease: 'easeInOut' },
+  swipe: { duration: 0.36, ease: 'easeOut' },
 }
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
+}
+
+function isPdfSource(source: string): boolean {
+  return /\.pdf($|[?#])/i.test(source)
 }
 
 function readSavedIndex(maxIndex: number): number {
@@ -75,6 +97,7 @@ export function StoryViewer({ story }: StoryViewerProps) {
   const lastIndex = hasScenes ? story.scenes.length - 1 : 0
   const [sceneIndex, setSceneIndex] = useState(() => readSavedIndex(lastIndex))
   const [direction, setDirection] = useState<1 | -1>(1)
+  const activeAudioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
     if (hasScenes) {
@@ -97,6 +120,70 @@ export function StoryViewer({ story }: StoryViewerProps) {
   const frameSrc = activeScene
     ? `${import.meta.env.BASE_URL}${activeScene.imageSrc}`
     : ''
+  const isPdfScene = activeScene ? isPdfSource(activeScene.imageSrc) : false
+  const isCutTransition = activeTransition === 'cut'
+  const hideNextButton = Boolean(
+    activeScene?.audioSrc &&
+      activeScene?.autoAdvanceOnAudioEnd &&
+      sceneIndex < lastIndex,
+  )
+
+  useEffect(() => {
+    if (activeAudioRef.current) {
+      activeAudioRef.current.pause()
+      activeAudioRef.current.currentTime = 0
+      activeAudioRef.current = null
+    }
+
+    const audioSrc = activeScene?.audioSrc
+    if (!audioSrc) {
+      return
+    }
+
+    const audio = new Audio(`${import.meta.env.BASE_URL}${audioSrc}`)
+    audio.preload = 'auto'
+
+    if (activeScene?.autoAdvanceOnAudioEnd && sceneIndex < lastIndex) {
+      audio.addEventListener('ended', () => {
+        setDirection(1)
+        setSceneIndex((currentIndex) => Math.min(currentIndex + 1, lastIndex))
+      })
+    }
+
+    activeAudioRef.current = audio
+    void audio.play().catch(() => {
+      // Browsers can block autoplay before user interaction.
+    })
+
+    return () => {
+      audio.pause()
+      audio.currentTime = 0
+      if (activeAudioRef.current === audio) {
+        activeAudioRef.current = null
+      }
+    }
+  }, [activeScene?.audioSrc, activeScene?.autoAdvanceOnAudioEnd, activeScene?.id, lastIndex, sceneIndex])
+
+  useEffect(() => {
+    if (!hasScenes) {
+      return
+    }
+
+    const nearIndexes = [sceneIndex + 1, sceneIndex - 1].filter(
+      (index) => index >= 0 && index <= lastIndex,
+    )
+
+    nearIndexes.forEach((index) => {
+      const nearScene = story.scenes[index]
+      if (isPdfSource(nearScene.imageSrc)) {
+        return
+      }
+
+      const nearImage = new Image()
+      nearImage.decoding = 'async'
+      nearImage.src = `${import.meta.env.BASE_URL}${nearScene.imageSrc}`
+    })
+  }, [hasScenes, lastIndex, sceneIndex, story.scenes])
 
   const handleNext = useCallback(() => {
     if (!hasScenes) {
@@ -142,36 +229,63 @@ export function StoryViewer({ story }: StoryViewerProps) {
   }, [handleNext, handlePrevious])
 
   const showTypeCursor = !isComplete
+  const sceneMedia = isPdfScene ? (
+    <object
+      className="story-pdf"
+      data={frameSrc}
+      type="application/pdf"
+      aria-label={`Story scene ${sceneIndex + 1} PDF`}
+    >
+      <p className="story-pdf-fallback">
+        PDF preview is not supported here.{' '}
+        <a href={frameSrc} target="_blank" rel="noreferrer">
+          Open PDF
+        </a>
+      </p>
+    </object>
+  ) : (
+    <img
+      className="story-image"
+      src={frameSrc}
+      alt={`Story scene ${sceneIndex + 1}`}
+      loading="eager"
+    />
+  )
 
   return (
     <main className="story-page">
       <header className="story-header">
-        <p className="story-overline">A small notebook film</p>
+        <p className="story-overline"></p>
         <h1>{story.title}</h1>
       </header>
 
       <section className="story-frame-shell" aria-label="Story frame">
         {hasScenes && activeScene ? (
-          <AnimatePresence mode="wait" initial={false} custom={direction}>
-            <motion.figure
+          isCutTransition ? (
+            <figure
               key={activeScene.id}
               className="story-frame"
-              custom={direction}
               data-transition={activeTransition}
-              variants={transitionVariants[activeTransition]}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              transition={transitionTiming[activeTransition]}
             >
-              <img
-                className="story-image"
-                src={frameSrc}
-                alt={`Story scene ${sceneIndex + 1}`}
-                loading="eager"
-              />
-            </motion.figure>
-          </AnimatePresence>
+              {sceneMedia}
+            </figure>
+          ) : (
+            <AnimatePresence mode="wait" initial={false} custom={direction}>
+              <motion.figure
+                key={activeScene.id}
+                className="story-frame"
+                custom={direction}
+                data-transition={activeTransition}
+                variants={transitionVariants[activeTransition]}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={transitionTiming[activeTransition]}
+              >
+                {sceneMedia}
+              </motion.figure>
+            </AnimatePresence>
+          )
         ) : (
           <figure className="story-frame" data-transition={activeTransition}>
             <div className="story-image story-image-empty">Add your first scene to begin.</div>
@@ -208,17 +322,21 @@ export function StoryViewer({ story }: StoryViewerProps) {
           {hasScenes ? `Scene ${sceneIndex + 1} / ${story.scenes.length}` : 'No scenes yet'}
         </p>
 
-        <button
-          type="button"
-          className="nav-button"
-          onClick={handleNext}
-          disabled={!hasScenes || (sceneIndex === lastIndex && isComplete)}
-        >
-          <span>Next</span>
-          <span className="nav-arrow nav-arrow-right" aria-hidden="true">
-            {'-->'}
-          </span>
-        </button>
+        {hideNextButton ? (
+          <div />
+        ) : (
+          <button
+            type="button"
+            className="nav-button"
+            onClick={handleNext}
+            disabled={!hasScenes || (sceneIndex === lastIndex && isComplete)}
+          >
+            <span>Next</span>
+            <span className="nav-arrow nav-arrow-right" aria-hidden="true">
+              {'-->'}
+            </span>
+          </button>
+        )}
       </footer>
     </main>
   )

@@ -41,7 +41,7 @@ Each scene supports:
 ```ts
 {
   id: string
-  imageSrc: string
+  imageSrc: string // supports .png, .jpg, .webp, .svg, .pdf
   caption: string
   transition?: 'slide' | 'fade' | 'cut' | 'zoom'
   typingSpeedMs?: number

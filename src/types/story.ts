@@ -1,4 +1,4 @@
-export type SceneTransition = 'slide' | 'fade' | 'cut' | 'zoom'
+export type SceneTransition = 'slide' | 'fade' | 'cut' | 'zoom' | 'swipe'
 
 export type Scene = {
   id: string
@@ -6,6 +6,8 @@ export type Scene = {
   caption: string
   transition?: SceneTransition
   typingSpeedMs?: number
+  audioSrc?: string
+  autoAdvanceOnAudioEnd?: boolean
 }
 
 export type StoryConfig = {
