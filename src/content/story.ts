@@ -107,5 +107,37 @@ export const storyConfig: StoryConfig = {
       transition: 'cut',
       typingSpeedMs: 21,
     },
+    {
+      id: 'scene-15',
+      imageSrc: 'scenes/scene-15.png',
+      caption: '',
+    },
+    {
+      id: 'scene-16',
+      imageSrc: 'scenes/scene-16.png',
+      caption: 'i wanna take her on a date',
+    },
+    {
+      id: 'scene-17',
+      imageSrc: 'scenes/scene-17.png',
+      caption: 'but i hate how we sit in dates',
+      transition: 'cut',
+    },
+    {
+      id: 'scene-18',
+      imageSrc: 'scenes/scene-18.png',
+      caption: 'exhibit A',
+      transition: 'cut',
+    },
+    {
+      id: 'scene-19',
+      imageSrc: 'scenes/scene-19.png',
+      caption: 'exhibit B',
+    },
+    {
+      id: 'scene-20',
+      imageSrc: 'scenes/scene-20.png',
+      caption: 'how i think we should sit:',
+    },
   ],
 }

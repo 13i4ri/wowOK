@@ -318,10 +318,6 @@ export function StoryViewer({ story }: StoryViewerProps) {
           <span>Previous</span>
         </button>
 
-        <p className="progress-text" role="status" aria-live="polite">
-          {hasScenes ? `Scene ${sceneIndex + 1} / ${story.scenes.length}` : 'No scenes yet'}
-        </p>
-
         {hideNextButton ? (
           <div />
         ) : (
