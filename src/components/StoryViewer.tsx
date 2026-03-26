@@ -4,7 +4,7 @@ import {
   type Transition,
   type Variants,
 } from 'framer-motion'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useTypewriter } from '../hooks/useTypewriter'
 import type { SceneTransition, StoryConfig } from '../types/story'
 
@@ -12,6 +12,10 @@ const STORAGE_KEY = 'romantic_story:last_scene'
 const SCENE_28_ID = 'scene-28'
 const SCENE_28_TOTAL_SECONDS = 20
 const SCENE_28_SLIDE_COUNT = 9
+const QUESTION_REPLY_CAPTION =
+  'oh yea i cant see your answer youre gonna have to send me a message'
+const DEFAULT_CREDITS_AUDIO_SRC = 'scenes/believe.mp3'
+const DEFAULT_CREDITS_SCRIPT_WORD_TARGET = 450
 
 type StoryViewerProps = {
   story: StoryConfig
@@ -95,11 +99,59 @@ function readSavedIndex(maxIndex: number): number {
   return clamp(parsedValue, 0, maxIndex)
 }
 
+function playAudioSafely(audio: HTMLAudioElement): void {
+  const playResult = audio.play()
+  if (playResult && typeof playResult.catch === 'function') {
+    void playResult.catch(() => {
+      // Browsers can block autoplay before user interaction.
+    })
+  }
+}
+
+function wordCount(text: string): number {
+  const trimmed = text.trim()
+  if (!trimmed) {
+    return 0
+  }
+
+  return trimmed.split(/\s+/).length
+}
+
+function buildScriptExcerptLines(scriptText: string, targetWordCount: number): string[] {
+  const outputLines: string[] = []
+  const normalizedTarget = Math.max(targetWordCount, 1)
+  let accumulatedWords = 0
+
+  for (const rawLine of scriptText.split(/\r?\n/)) {
+    const line = rawLine.trim()
+
+    if (!line) {
+      if (outputLines.length > 0 && outputLines[outputLines.length - 1] !== '') {
+        outputLines.push('')
+      }
+      continue
+    }
+
+    outputLines.push(line)
+    accumulatedWords += wordCount(line)
+
+    if (accumulatedWords >= normalizedTarget) {
+      break
+    }
+  }
+
+  return outputLines
+}
+
 export function StoryViewer({ story }: StoryViewerProps) {
   const hasScenes = story.scenes.length > 0
   const lastIndex = hasScenes ? story.scenes.length - 1 : 0
   const [sceneIndex, setSceneIndex] = useState(() => readSavedIndex(lastIndex))
   const [direction, setDirection] = useState<1 | -1>(1)
+  const [showDateQuestion, setShowDateQuestion] = useState(false)
+  const [showCredits, setShowCredits] = useState(false)
+  const [showQuestionReplyCaption, setShowQuestionReplyCaption] = useState(false)
+  const [creditsScriptLines, setCreditsScriptLines] = useState<string[] | null>(null)
   const [scene28FallbackSeconds, setScene28FallbackSeconds] = useState(0)
   const [scene28AudioSeconds, setScene28AudioSeconds] = useState(0)
   const activeAudioRef = useRef<HTMLAudioElement | null>(null)
@@ -127,7 +179,35 @@ export function StoryViewer({ story }: StoryViewerProps) {
   const frameSrc = activeScene
     ? `${import.meta.env.BASE_URL}${activeScene.imageSrc}`
     : ''
+  const creditsIntroLines = story.credits?.lines ?? []
+  const creditsDurationMs = story.credits?.scrollDurationMs ?? 20000
+  const creditsAudioSrc = story.credits?.audioSrc ?? DEFAULT_CREDITS_AUDIO_SRC
+  const creditsScriptSrc = story.credits?.scriptSrc
+  const creditsScriptWordTarget =
+    story.credits?.scriptWordTarget ?? DEFAULT_CREDITS_SCRIPT_WORD_TARGET
+  const resolvedScriptLines = creditsScriptSrc
+    ? (creditsScriptLines ?? ['loading titanic script...'])
+    : []
+  const creditsDisplayLines = [
+    ...creditsIntroLines,
+    ...(creditsIntroLines.length > 0 && resolvedScriptLines.length > 0 ? [''] : []),
+    ...resolvedScriptLines,
+  ]
+  const creditsLinesToRender = creditsDisplayLines.length > 0 ? creditsDisplayLines : ['THE END']
+  const creditsRollStyle = {
+    '--credits-duration': `${Math.max(creditsDurationMs, 1)}ms`,
+  } as CSSProperties
+  const isDateQuestionFrame = hasScenes && showDateQuestion && sceneIndex === lastIndex
+  const isCreditsFrame = isDateQuestionFrame && showCredits
   const isScene28 = activeScene?.id === SCENE_28_ID
+  const frameKey = activeScene
+    ? isCreditsFrame
+      ? 'story-credits'
+      : isDateQuestionFrame
+      ? `${activeScene.id}-date-question`
+      : activeScene.id
+    : 'empty-scene'
+  const frameTransition: SceneTransition = isDateQuestionFrame ? 'fade' : activeTransition
   const scene28ProgressSeconds = isScene28
     ? Math.max(scene28AudioSeconds, scene28FallbackSeconds)
     : 0
@@ -145,12 +225,64 @@ export function StoryViewer({ story }: StoryViewerProps) {
     scene28SlideIndex + 1
   }.png`
   const isPdfScene = activeScene ? isPdfSource(activeScene.imageSrc) : false
-  const isCutTransition = activeTransition === 'cut'
+  const isCutTransition = frameTransition === 'cut'
   const hideNextButton = Boolean(
     activeScene?.audioSrc &&
       activeScene?.autoAdvanceOnAudioEnd &&
-      sceneIndex < lastIndex,
+      sceneIndex < lastIndex &&
+      !isDateQuestionFrame,
   )
+  const showCreditsButton = isDateQuestionFrame && showQuestionReplyCaption && !isCreditsFrame
+  const activeAudioSrc = isCreditsFrame
+    ? creditsAudioSrc
+    : isDateQuestionFrame
+    ? null
+    : (activeScene?.audioSrc ?? null)
+  const captionText = hasScenes
+    ? isCreditsFrame
+      ? ''
+      : isDateQuestionFrame
+      ? showQuestionReplyCaption
+        ? QUESTION_REPLY_CAPTION
+        : ''
+      : typedText
+    : 'No scenes yet. Update src/content/story.ts to start your story.'
+
+  useEffect(() => {
+    if (!creditsScriptSrc) {
+      return
+    }
+
+    let isDisposed = false
+
+    fetch(`${import.meta.env.BASE_URL}${creditsScriptSrc}`)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Failed to load credits script: ${response.status}`)
+        }
+
+        return response.text()
+      })
+      .then((scriptText) => {
+        if (isDisposed) {
+          return
+        }
+
+        const excerptLines = buildScriptExcerptLines(scriptText, creditsScriptWordTarget)
+        setCreditsScriptLines(excerptLines)
+      })
+      .catch(() => {
+        if (isDisposed) {
+          return
+        }
+
+        setCreditsScriptLines(['unable to load script text.'])
+      })
+
+    return () => {
+      isDisposed = true
+    }
+  }, [creditsScriptSrc, creditsScriptWordTarget])
 
   useEffect(() => {
     if (!isScene28) {
@@ -179,12 +311,11 @@ export function StoryViewer({ story }: StoryViewerProps) {
       activeAudioRef.current = null
     }
 
-    const audioSrc = activeScene?.audioSrc
-    if (!audioSrc) {
+    if (!activeAudioSrc) {
       return
     }
 
-    const audio = new Audio(`${import.meta.env.BASE_URL}${audioSrc}`)
+    const audio = new Audio(`${import.meta.env.BASE_URL}${activeAudioSrc}`)
     audio.preload = 'auto'
     const onTimeUpdate = () => {
       if (!isScene28) {
@@ -197,7 +328,7 @@ export function StoryViewer({ story }: StoryViewerProps) {
     audio.addEventListener('play', onTimeUpdate)
     audio.addEventListener('timeupdate', onTimeUpdate)
 
-    if (activeScene?.autoAdvanceOnAudioEnd && sceneIndex < lastIndex) {
+    if (!isCreditsFrame && activeScene?.autoAdvanceOnAudioEnd && sceneIndex < lastIndex) {
       const onEnded = () => {
         setDirection(1)
         setSceneIndex((currentIndex) => Math.min(currentIndex + 1, lastIndex))
@@ -205,9 +336,7 @@ export function StoryViewer({ story }: StoryViewerProps) {
       audio.addEventListener('ended', onEnded)
 
       activeAudioRef.current = audio
-      void audio.play().catch(() => {
-        // Browsers can block autoplay before user interaction.
-      })
+      playAudioSafely(audio)
 
       return () => {
         audio.removeEventListener('play', onTimeUpdate)
@@ -222,9 +351,7 @@ export function StoryViewer({ story }: StoryViewerProps) {
     }
 
     activeAudioRef.current = audio
-    void audio.play().catch(() => {
-      // Browsers can block autoplay before user interaction.
-    })
+    playAudioSafely(audio)
 
     return () => {
       audio.removeEventListener('play', onTimeUpdate)
@@ -235,7 +362,16 @@ export function StoryViewer({ story }: StoryViewerProps) {
         activeAudioRef.current = null
       }
     }
-  }, [activeScene?.audioSrc, activeScene?.autoAdvanceOnAudioEnd, activeScene?.id, isScene28, lastIndex, sceneIndex])
+  }, [
+    activeAudioSrc,
+    activeScene?.autoAdvanceOnAudioEnd,
+    activeScene?.id,
+    isCreditsFrame,
+    isDateQuestionFrame,
+    isScene28,
+    lastIndex,
+    sceneIndex,
+  ])
 
   useEffect(() => {
     if (!hasScenes) {
@@ -276,26 +412,86 @@ export function StoryViewer({ story }: StoryViewerProps) {
       return
     }
 
+    if (showCredits) {
+      return
+    }
+
+    if (showDateQuestion) {
+      return
+    }
+
     if (!isComplete) {
       completeImmediately()
       return
     }
 
+    if (sceneIndex === lastIndex) {
+      setDirection(1)
+      setShowDateQuestion(true)
+      setShowQuestionReplyCaption(false)
+      setShowCredits(false)
+      return
+    }
+
     setDirection(1)
+    setShowQuestionReplyCaption(false)
+    setShowCredits(false)
     setSceneIndex((currentIndex) => Math.min(currentIndex + 1, lastIndex))
-  }, [completeImmediately, hasScenes, isComplete, lastIndex])
+  }, [completeImmediately, hasScenes, isComplete, lastIndex, sceneIndex, showCredits, showDateQuestion])
 
   const handlePrevious = useCallback(() => {
     if (!hasScenes) {
       return
     }
 
+    if (showCredits) {
+      return
+    }
+
+    if (showDateQuestion) {
+      setDirection(-1)
+      setShowDateQuestion(false)
+      setShowQuestionReplyCaption(false)
+      setShowCredits(false)
+      return
+    }
+
     setDirection(-1)
+    setShowQuestionReplyCaption(false)
+    setShowCredits(false)
     setSceneIndex((currentIndex) => Math.max(currentIndex - 1, 0))
-  }, [hasScenes])
+  }, [hasScenes, showCredits, showDateQuestion])
+
+  const handleQuestionYes = useCallback(() => {
+    if (!isDateQuestionFrame) {
+      return
+    }
+
+    setShowQuestionReplyCaption(true)
+  }, [isDateQuestionFrame])
+
+  const handleQuestionNo = useCallback(() => {
+    if (!isDateQuestionFrame) {
+      return
+    }
+
+    setShowQuestionReplyCaption(true)
+  }, [isDateQuestionFrame])
+
+  const handleGoToCredits = useCallback(() => {
+    if (!isDateQuestionFrame) {
+      return
+    }
+
+    setShowCredits(true)
+  }, [isDateQuestionFrame])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (showCredits) {
+        return
+      }
+
       if (event.key === 'ArrowRight') {
         event.preventDefault()
         handleNext()
@@ -312,10 +508,24 @@ export function StoryViewer({ story }: StoryViewerProps) {
     return () => {
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [handleNext, handlePrevious])
+  }, [handleNext, handlePrevious, showCredits])
 
-  const showTypeCursor = !isComplete
-  const sceneMedia = isScene28 ? (
+  const showTypeCursor = !isDateQuestionFrame && !isCreditsFrame && !isComplete
+  const sceneMedia = isCreditsFrame ? (
+    <div className="story-credits-screen">
+      <div className="story-credits-roll" style={creditsRollStyle}>
+        {creditsLinesToRender.map((line, lineIndex) => (
+          <p key={`credit-line-${lineIndex}`} className="story-credits-line">
+            {line}
+          </p>
+        ))}
+      </div>
+    </div>
+  ) : isDateQuestionFrame ? (
+    <div className="story-question-screen">
+      <p className="story-question-text">do you wanna go out</p>
+    </div>
+  ) : isScene28 ? (
     <img
       className="story-image"
       src={scene28SlideSrc}
@@ -356,24 +566,24 @@ export function StoryViewer({ story }: StoryViewerProps) {
         {hasScenes && activeScene ? (
           isCutTransition ? (
             <figure
-              key={activeScene.id}
+              key={frameKey}
               className="story-frame"
-              data-transition={activeTransition}
+              data-transition={frameTransition}
             >
               {sceneMedia}
             </figure>
           ) : (
             <AnimatePresence mode="wait" initial={false} custom={direction}>
               <motion.figure
-                key={activeScene.id}
+                key={frameKey}
                 className="story-frame"
                 custom={direction}
-                data-transition={activeTransition}
-                variants={transitionVariants[activeTransition]}
+                data-transition={frameTransition}
+                variants={transitionVariants[frameTransition]}
                 initial="enter"
                 animate="center"
                 exit="exit"
-                transition={transitionTiming[activeTransition]}
+                transition={transitionTiming[frameTransition]}
               >
                 {sceneMedia}
               </motion.figure>
@@ -388,7 +598,7 @@ export function StoryViewer({ story }: StoryViewerProps) {
 
       <section className="story-caption-wrap" aria-live="polite">
         <p className="story-caption">
-          {hasScenes ? typedText : 'No scenes yet. Update src/content/story.ts to start your story.'}
+          {captionText}
           <span
             className={`typing-cursor${showTypeCursor ? ' is-visible' : ''}`}
             aria-hidden="true"
@@ -396,37 +606,48 @@ export function StoryViewer({ story }: StoryViewerProps) {
             |
           </span>
         </p>
+        {showCreditsButton && (
+          <button type="button" className="credits-button" onClick={handleGoToCredits}>
+            go to credits
+          </button>
+        )}
       </section>
 
-      <footer className="story-controls" aria-label="Story controls">
-        <button
-          type="button"
-          className="nav-button"
-          onClick={handlePrevious}
-          disabled={!hasScenes || sceneIndex === 0}
-        >
-          <span className="nav-arrow nav-arrow-left" aria-hidden="true">
-            {'<--'}
-          </span>
-          <span>Previous</span>
-        </button>
-
-        {hideNextButton ? (
-          <div />
-        ) : (
+      {!isCreditsFrame && (
+        <footer className="story-controls" aria-label="Story controls">
           <button
             type="button"
             className="nav-button"
-            onClick={handleNext}
-            disabled={!hasScenes || (sceneIndex === lastIndex && isComplete)}
+            onClick={showDateQuestion ? handleQuestionNo : handlePrevious}
+            disabled={!hasScenes || (sceneIndex === 0 && !showDateQuestion)}
           >
-            <span>Next</span>
-            <span className="nav-arrow nav-arrow-right" aria-hidden="true">
-              {'-->'}
-            </span>
+            {!showDateQuestion && (
+              <span className="nav-arrow nav-arrow-left" aria-hidden="true">
+                {'<--'}
+              </span>
+            )}
+            <span>{showDateQuestion ? 'no' : 'Previous'}</span>
           </button>
-        )}
-      </footer>
+
+          {hideNextButton ? (
+            <div />
+          ) : (
+            <button
+              type="button"
+              className="nav-button"
+              onClick={showDateQuestion ? handleQuestionYes : handleNext}
+              disabled={!hasScenes}
+            >
+              <span>{showDateQuestion ? 'yes' : 'Next'}</span>
+              {!showDateQuestion && (
+                <span className="nav-arrow nav-arrow-right" aria-hidden="true">
+                  {'-->'}
+                </span>
+              )}
+            </button>
+          )}
+        </footer>
+      )}
     </main>
   )
 }

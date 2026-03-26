@@ -20,6 +20,11 @@ vi.mock('framer-motion', () => {
 
 const testStory: StoryConfig = {
   title: 'Test Story',
+  credits: {
+    lines: ['line one', 'line two'],
+    audioSrc: 'scenes/believe.mp3',
+    scrollDurationMs: 5000,
+  },
   defaults: {
     transition: 'slide',
     typingSpeedMs: 99999,
@@ -110,7 +115,7 @@ describe('StoryViewer', () => {
     expect(getFrame()).toHaveAttribute('data-transition', 'zoom')
   })
 
-  it('restores the saved scene index from localStorage', async () => {
+  it('restores the saved scene index from localStorage and opens post-story question on Next', async () => {
     const user = userEvent.setup()
     window.localStorage.setItem(STORAGE_KEY, '2')
 
@@ -121,6 +126,32 @@ describe('StoryViewer', () => {
     expect(nextButton).toBeEnabled()
 
     await user.click(nextButton)
-    expect(nextButton).toBeDisabled()
+    await user.click(nextButton)
+    expect(screen.getByText('do you wanna go out')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /yes/i })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /no|not/i })).toBeEnabled()
+  })
+
+  it('shows credits button after a yes/no click and enters credits mode', async () => {
+    const user = userEvent.setup()
+    window.localStorage.setItem(STORAGE_KEY, '2')
+
+    render(<StoryViewer story={testStory} />)
+
+    await user.click(screen.getByRole('button', { name: /next/i }))
+    await user.click(screen.getByRole('button', { name: /next/i }))
+    await user.click(screen.getByRole('button', { name: /yes/i }))
+
+    expect(
+      screen.getByText('oh yea i cant see your answer youre gonna have to send me a message'),
+    ).toBeInTheDocument()
+
+    const creditsButton = screen.getByRole('button', { name: /go to credits/i })
+    expect(creditsButton).toBeInTheDocument()
+
+    await user.click(creditsButton)
+
+    expect(screen.getByText('line one')).toBeInTheDocument()
+    expect(screen.queryByRole('contentinfo', { name: 'Story controls' })).not.toBeInTheDocument()
   })
 })

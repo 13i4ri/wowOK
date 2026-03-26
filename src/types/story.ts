@@ -13,6 +13,13 @@ export type Scene = {
 export type StoryConfig = {
   title: string
   scenes: Scene[]
+  credits?: {
+    lines: string[]
+    audioSrc?: string
+    scrollDurationMs?: number
+    scriptSrc?: string
+    scriptWordTarget?: number
+  }
   defaults?: {
     transition?: SceneTransition
     typingSpeedMs?: number

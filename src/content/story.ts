@@ -2,6 +2,26 @@ import type { StoryConfig } from '../types/story'
 
 export const storyConfig: StoryConfig = {
   title: '',
+  credits: {
+    audioSrc: 'scenes/believe.mp3',
+    scrollDurationMs: 220000,
+    scriptSrc: 'scenes/titanic.txt',
+    scriptWordTarget: 450,
+    lines: [
+      'DIRECTED BY: ME',
+      'STARRING: ME + YOU',
+      'MUSIC: BELIEVE',
+      'SPECIAL THANKS: YOUR SMILE',
+      'THE END',
+      '.',
+      '.',
+      '.',
+      '.',
+      '',
+      '',
+      'here is the titanic movie:',
+    ],
+  },
   defaults: {
     transition: 'slide',
     typingSpeedMs: 26,
@@ -193,11 +213,22 @@ export const storyConfig: StoryConfig = {
       id: 'scene-29',
       imageSrc: 'scenes/scene-29.png',
       caption: '',
+      transition: 'fade',
+      audioSrc: 'scenes/heartbeat.mp3',
     },
     {
       id: 'scene-30',
-      imageSrc: 'scenes/scene-30.png',
+      imageSrc: 'scenes/scene-30-2.png',
       caption: '',
+      transition: 'fade',
+      audioSrc: 'scenes/heartbeat.mp3',
     },
+    {
+      id: 'scene-31',
+      imageSrc: 'scenes/scene-31.png',
+      caption: '',
+      transition: 'fade',
+      audioSrc: 'scenes/heartbeat.mp3',
+    }
   ],
 }
