@@ -1,7 +1,7 @@
 import type { StoryConfig } from '../types/story'
 
 export const storyConfig: StoryConfig = {
-  title: 'bro is not sending this to other girls',
+  title: '',
   credits: {
     audioSrc: 'scenes/believe.mp3',
     scrollDurationMs: 220000,
